@@ -2,7 +2,7 @@ CFLAGS = -I../include -pthread -O1
 LIB    = ../lib/x11/libglfw.a
 LFLAGS = $(LIB) -lrt -lX11 -lGLU -lGL -pthread -lm -lXrandr
 
-all: midterm ms 
+all: midterm
 
 midterm: midterm.o ../lib/x11/libglfw.a
 	g++ midterm.o $(LFLAGS) -o midterm
@@ -10,14 +10,7 @@ midterm: midterm.o ../lib/x11/libglfw.a
 midterm.o: midterm.cpp
 	g++ -c $(CFLAGS) midterm.cpp
 
-ms: ms.o ../lib/x11/libglfw.a
-	gcc ms.o $(LFLAGS) -o ms
-
-ms.o: ms.c
-	gcc -c $(CFLAGS) ms.c
-
 clean:
 	rm -f midterm
-	rm -f ms
 	rm -f *.o
 
