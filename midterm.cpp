@@ -1,188 +1,502 @@
-#include <iostream>
-using namespace std;
+//cs335 Spring 2013
+//program: ms.c
+//author:  gordon griesel
+//purpose: midterm sampler
+//
+//This program contains functions you can use
+//in your midterm and final project.
+//
+//1. draw a game board in middle of screen
+//2. draw grid lines
+//3. find the center of each grid square
+//4. draw smaller squares inside each grid square
+//5. track mouse movement over each square
+//6. highlight grid squares
+//7. grids textured with images
+//
+//
+//notes:
+//This code assumes a 4x4 grid on the game board.
+//Try to make the grid dimensions generic.
+//
+//There are many places in the code that can be made more efficient and more
+//generic. Part of the exercise for the midterm/final projects is to improve
+//the code samples you are given, based upon the features you include in your
+//project.
+//
+//
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <GL/glfw.h>
+//macros
+#define rnd() (double)rand()/(double)RAND_MAX
+//prototypes
+void init(void);
+int init_glfw(void);
+void init_opengl(void);
+void init_grid(void);
+void render(void);
+void GLFWCALL mouse_click(int button, int action);
+void check_mouse(void);
+void get_grid_center(const int i, const int j, int cent[2]);
+int xres=640;
+int yres=480;
+//
+typedef struct t_grid {
+	char contents;
+	bool mouse_hover;
+	bool mark;
+	bool check;
+	int row;
+	int col;
+} Grid;
+Grid **grid;
+int grid_dim=8;
+int board_dim;
+int qsize;
+//
+GLuint Htexture;
+GLuint Vtexture;
+GLuint loadBMP(const char *imagepath);
 
-struct Cell
+
+int main(void)
 {
-    char val;	// V, H, or 0
-    int row;
-    int col;
-    bool mark;
-    bool check;
-};
-
-bool path_vert (Cell &cell, Cell** grid, int size);
-bool path_horiz (Cell &cell, Cell** grid, int size);
-
-int main()
-{
-    int size = 4;
-    char winner = ' ';
-
-    Cell **grid = new Cell*[size];
-    for (int i = 0; i < size; i++)
-    {
-	grid[i] = new Cell[size];
-    }
-
-    for (int i = 0; i < size; i++)
-    {
-	for (int j = 0; j < size; j++)
-	{
-	    grid[i][j].val = '0';
-	    grid[i][j].mark = false;
-	    grid[i][j].check = false;
-	    grid[i][j].row = i;
-	    grid[i][j].col = j;
+	if (init_glfw()) {
+		exit(EXIT_FAILURE);
 	}
-    }
-
-    grid [0][3].val = 'H';
-    grid [1][1].val = 'H';
-    grid [2][0].val = 'H';
-//    grid [1][3].val = 'H';
-    grid [2][3].val = 'H';
-    grid [3][2].val = 'H';
-    grid [2][2].val = 'H';
-    grid [0][0].val = 'H';
-
-    // Code for player V's turn goes here
-    
-    for (int i = 0; i < size; i++)
-    {
-	if (grid[0][i].val == 'V')
-	{
-	    if (path_vert (grid[0][i], grid, size))
-	    {
-		winner = 'V';
-		break;
-	    }
+	init_opengl();
+	init();
+	srand((unsigned int)time(NULL));
+	init_grid();
+	while(1) {
+		check_mouse();
+		render();
+		glfwSwapBuffers();
+		if (glfwGetKey(GLFW_KEY_ESC) == GLFW_PRESS) break;
+		if (!glfwGetWindowParam(GLFW_OPENED)) break;
 	}
-    }
-
-    // Code for player H's turn goes here
-    
-    for (int i = 0; i < size; i++)
-    {
-	if (grid[i][0].val == 'H')
-	{
-	    if (path_horiz(grid[i][0], grid, size))
-	    {
-		winner = 'H';
-		break;
-	    }
-	}
-    }
-
-    if (winner != ' ')
-    {
-	for (int i = 0; i < size; i++)
-	{
-	    for (int j = 0; j < size; j++)
-	    {
-		if (grid[i][j].mark == true)
-		{
-		    grid[i][j].val = '*';
-		}
-	    }
-	}
-	cout << "\nWinner: " << winner << "\n\n";
-    }
-    else
-	cout << "\nNo winner.\n\n";
-
-    for (int i = 0; i < size; i++)
-    {
-	for (int j = 0; j< size; j++)
-	{
-	    cout << grid[i][j].val << " ";
-	}
-	cout << "\n";
-    }
-    cout << "\n";
-
-    return 0;
+	glfwTerminate();
+	exit(EXIT_SUCCESS);
 }
 
-bool path_vert (Cell &cell, Cell** grid, int size)
+void init_grid(void)
 {
-    cell.mark = true;
-    if (cell.row == size - 1)
-    {
-	return true;
-    }    
-
-    int row_min = cell.row - 1;
-    if (row_min < 0)
-	row_min = 0;
-    int row_max = cell.row + 1;
-    if (row_max >=size)
-	row_max = size - 1;
-    int col_min = cell.col - 1;
-    if (col_min < 0)
-	col_min = 0;
-    int col_max = cell.col + 1;
-    if (col_max >= size)
-	col_max = size - 1;
-
-    for (int row = row_max; row >= row_min; row--)
-    {
-	for (int col = col_min; col <= col_max; col++)
-	{
-	    if (grid[row][col].val == 'V' && grid[row][col].check == false)
-	    {
-    		grid[row][col].check = true;
-    		bool good = path_vert (grid[row][col], grid, size);
-
-    		if (!good)
-		{
-    		    grid[row][col].mark = false;
+	// Allocate grid memory, initialize cells.
+	int i, j;
+	grid = (Grid**) calloc(grid_dim, sizeof(Grid*));
+	for(i=0; i < grid_dim; i++) {
+		grid[i] = (Grid*) calloc(grid_dim, sizeof(Grid));
+		for(j=0; j < grid_dim; j++) {
+			grid[i][j].contents = '\0';
+			grid[i][j].mouse_hover = false;
+			grid[i][j].mark = false;
+			grid[i][j].check = false;
+			grid[i][j].row = i;
+			grid[i][j].col = j;
 		}
-		if (grid[row][col].mark == true)
-    		    return good;
-	    }
 	}
-    }
-    return false;
 }
 
-bool path_horiz (Cell &cell, Cell** grid, int size)
-{ 
-    cell.mark = true;
-    if (cell.col == size - 1)
-    {
-	return true;
-    }    
-
-    int row_min = cell.row - 1;
-    if (row_min < 0)
-	row_min = 0;
-    int row_max = cell.row + 1;
-    if (row_max >=size)
-	row_max = size - 1;
-    int col_min = cell.col - 1;
-    if (col_min < 0)
-	col_min = 0;
-    int col_max = cell.col + 1;
-    if (col_max >= size)
-	col_max = size - 1;
-
-    for (int row = row_min; row <= row_max; row++)
-    {
-	for (int col = col_max; col >= col_min; col--)
-	{
-	    if (grid[row][col].val == 'H' && grid[row][col].check == false)
-	    {
-    		grid[row][col].check = true;
-    		bool good = path_horiz (grid[row][col], grid, size);
-
-    		if (!good)
-		{
-    		    grid[row][col].mark = false;
-		}
-		if (grid[row][col].mark == true)
-    		    return good;
-	    }
+int init_glfw(void)
+{
+	int nmodes;
+	GLFWvidmode glist[256];
+	if (!glfwInit()){
+		printf("Failed to initialize GLFW\n");
+		return 1;
 	}
-    }
-    return false;
+	//get the monitor native full-screen resolution
+	nmodes = glfwGetVideoModes(glist, 250);
+	xres = glist[nmodes-1].Width;
+	yres = glist[nmodes-1].Height;
+	//create a window
+	//if (!glfwOpenWindow(xres, yres, 0, 0, 0, 0, 0, 0, GLFW_WINDOW)) {
+	if (!glfwOpenWindow(xres,yres,8,8,8,0,32,0,GLFW_FULLSCREEN)) {
+		glfwTerminate();
+		return 1;
+	}
+	glfwSetWindowTitle("Game Board and Grid");
+	glfwSetWindowPos(0, 0);
+	//make sure we see the escape key pressed
+	glfwEnable(GLFW_STICKY_KEYS);
+	glfwSetMouseButtonCallback(mouse_click);
+	glfwEnable( GLFW_MOUSE_CURSOR );
+	//enable vertical sync (on cards that support it)
+	glfwSwapInterval(1);
+	return 0;
+}
+
+void init_opengl(void)
+{
+	//OpenGL initialization
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClearDepth(1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glEnable(GL_COLOR_MATERIAL);
+	//
+	//choose one of these
+	//glShadeModel(GL_FLAT);
+	glShadeModel(GL_SMOOTH);
+	glDisable(GL_LIGHTING);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	//
+	glEnable(GL_TEXTURE_2D);
+	Htexture = loadBMP("H.bmp");
+	Vtexture = loadBMP("V.bmp");
+	glBindTexture(GL_TEXTURE_2D, 0);
+	printf("tex: %i %i\n",Htexture,Vtexture);
+}
+
+void init(void)
+{
+	board_dim = yres - 200;
+	//make board dim divisible by grid_dim
+	board_dim -= (board_dim % grid_dim);
+	int bq;
+	//quad upper-left corner
+	//bq is the width of one grid section
+	bq = (board_dim / grid_dim);
+	qsize = (bq-10) / 2;
+	//
+	//notes:
+	//This code is not generic.
+	//A goal for this project is to make your board-size generic.
+	//Allow the user to select the grid dimensions.
+	//For instance, 8x8 board, or 20x20 board.
+	//Maybe get this parameter at the command-line.
+}
+
+void check_mouse(void)
+{
+	static int sx=0,sy=0;
+	int x,y;
+	int i,j;
+	int cent[2];
+	glfwGetMousePos(&x, &y);
+	//reverse the y position
+	y = yres - y;
+	if (x == sx && y == sy) return;
+	sx=x;
+	sy=y;
+	//
+	//is the mouse over any grid squares?
+	//
+	for (i=0; i<grid_dim; i++) {
+		for (j=0; j<grid_dim; j++) {
+			grid[i][j].mouse_hover=false;
+		}
+	}
+	for (i=0; i<grid_dim; i++) {
+		for (j=0; j<grid_dim; j++) {
+			get_grid_center(i,j,cent);
+			if (x >= cent[0]-qsize &&
+				x <= cent[0]+qsize &&
+				y >= cent[1]-qsize &&
+				y <= cent[1]+qsize) {
+				grid[i][j].mouse_hover=true;
+				break;
+				//You could do a return here.
+				//If more code is added below, a return
+				//would cause you to exit too early.
+			}
+		}
+		if (grid[i][j].mouse_hover) break;
+	}
+}
+
+void GLFWCALL mouse_click(int button, int action)
+{
+	int x,y;
+	if (action == GLFW_PRESS) {
+		int i,j,k=0;
+		//center of a grid
+		int cent[2];
+		glfwGetMousePos(&x, &y);
+		//reverse the y position
+		y = yres - y;
+		for (i=0; i<grid_dim; i++) {
+			for (j=0; j<grid_dim; j++) {
+				get_grid_center(i,j,cent);
+				if (x >= cent[0]-qsize &&
+					x <= cent[0]+qsize &&
+					y >= cent[1]-qsize &&
+					y <= cent[1]+qsize) {
+					if (button == GLFW_MOUSE_BUTTON_LEFT)  grid[i][j].contents='V';
+					if (button == GLFW_MOUSE_BUTTON_RIGHT) grid[i][j].contents='H';
+					k=1;
+					break;
+				}
+			}
+			if (k) break;
+		}
+	}
+}
+
+void get_grid_center(const int i, const int j, int cent[2])
+{
+	//This function can be optimized, and made more generic.
+	int b2 = board_dim/2;
+	int screen_center[2] = {xres/2, yres/2};
+	int s0 = screen_center[0];
+	int s1 = screen_center[1];
+	int bq;
+	//quad upper-left corner
+	int quad[2];
+	//make board dim divisible by 4
+	board_dim -= (board_dim % grid_dim);
+	//bq is the width of one grid section
+	bq = (board_dim / grid_dim);
+	//-------------------------------------
+	quad[0] = s0-b2;
+	quad[1] = s1-b2;
+	cent[0] = quad[0] + bq/2;
+	cent[1] = quad[1] + bq/2;
+	cent[0] += (bq * j);
+	cent[1] += (bq * i);
+}
+
+void render(void)
+{
+	int i,j;
+	//--------------------------------------------------------
+	//This code is repeated several times in this program, so
+	//it can be made more generic and cleaner with some work.
+	int b2 = board_dim/2;
+	int screen_center[2] = {xres/2, yres/2};
+	int s0 = screen_center[0];
+	int s1 = screen_center[1];
+	int bq, bp;
+	//quad upper-left corner
+	int quad[2], saveq0;
+	//center of a grid
+	int cent[2];
+	//bq is the width of one grid section
+	bq = (board_dim / grid_dim);
+	//--------------------------------------------------------
+	//start the opengl stuff
+	//set the viewing area on screen
+	glViewport(0, 0, xres, yres);
+	//clear color buffer
+	glClearColor(0.1f, 0.2f, 0.3f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	//init matrices
+	glMatrixMode (GL_PROJECTION); glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW); glLoadIdentity();
+	//this sets to 2D mode (no perspective)
+	glOrtho(0, xres, 0, yres, -1, 1);
+	glColor3f(0.8f, 0.6f, 0.2f);
+	//draw stuff
+	//draw the main game board in middle of screen
+	glBegin(GL_QUADS);
+		glVertex2i(s0-b2, s1-b2);
+		glVertex2i(s0-b2, s1+b2);
+		glVertex2i(s0+b2, s1+b2);
+		glVertex2i(s0+b2, s1-b2);
+	glEnd();
+	//draw grid lines
+	//vertical
+	glColor3f(0.1f, 0.1f, 0.1f);
+	bp = s0-b2;
+	glLineWidth(2);
+	glBegin(GL_LINES);
+		bp += bq;
+		glVertex2i(bp, s1-b2);
+		glVertex2i(bp, s1+b2);
+		bp += bq;
+		glVertex2i(bp, s1-b2);
+		glVertex2i(bp, s1+b2);
+		bp += bq;
+		glVertex2i(bp, s1-b2);
+		glVertex2i(bp, s1+b2);
+	glEnd();
+	//horizontal
+	glColor3f(0.2f, 0.2f, 0.2f);
+	bp = s1-b2;
+	glBegin(GL_LINES);
+		bp += bq;
+		glVertex2i(s0-b2, bp);
+		glVertex2i(s0+b2, bp);
+		bp += bq;
+		glVertex2i(s0-b2, bp);
+		glVertex2i(s0+b2, bp);
+		bp += bq;
+		glVertex2i(s0-b2, bp);
+		glVertex2i(s0+b2, bp);
+	glEnd();
+	glLineWidth(1);
+	//
+	//draw a new square in center of each grid
+	//squares are slightly smaller than grid
+	//
+	for (i=0; i<grid_dim; i++) {
+		for (j=0; j<grid_dim; j++) {
+			get_grid_center(i,j,cent);
+			glColor3f(0.5f, 0.1f, 0.1f);
+			if (grid[i][j].mouse_hover) {
+				glColor3f(1.0f, 1.0f, 0.0f);
+			}
+			glBindTexture(GL_TEXTURE_2D, 0);
+			if (grid[i][j].contents=='V') glBindTexture(GL_TEXTURE_2D, Vtexture);
+			if (grid[i][j].contents=='H') glBindTexture(GL_TEXTURE_2D, Htexture);
+			glBegin(GL_QUADS);
+				glTexCoord2f(0.0f, 0.0f); glVertex2i(cent[0]-qsize,cent[1]-qsize);
+				glTexCoord2f(0.0f, 1.0f); glVertex2i(cent[0]-qsize,cent[1]+qsize);
+				glTexCoord2f(1.0f, 1.0f); glVertex2i(cent[0]+qsize,cent[1]+qsize);
+				glTexCoord2f(1.0f, 0.0f); glVertex2i(cent[0]+qsize,cent[1]-qsize);
+			glEnd();
+			glBindTexture(GL_TEXTURE_2D, 0);
+		}
+	}
+}
+
+GLuint loadBMP(const char *imagepath)
+{
+	//When you create your texture files, please specify
+	//type: BMP
+	//color depth: 24-bit
+	unsigned int retval;
+	unsigned char header[54];
+	//Each BMP file begins by a 54-bytes header
+	//Position in the file where the actual data begins
+	unsigned int dataPos;
+	unsigned int width, height;
+	unsigned int imageSize;
+	// = width*height*3
+	//RGB data will go in this
+	unsigned char *data;
+	//
+	printf("loadBMP(%s)...\n",imagepath);
+	//Log("opening file **%s**\n",imagepath);
+	FILE * file = fopen(imagepath,"r");
+	if (!file) {
+		printf("Image could not be opened\n");
+		return 0;
+	}
+	if (fread(header, 1, 54, file)!=54) {
+		// If not 54 bytes read : problem
+		printf("Not a correct BMP file\n");
+		return 0;
+	}
+	if (header[0]!='B' || header[1]!='M') {
+		printf("Not a correct BMP file\n");
+		return 0;
+	}
+	dataPos   = *(int*)&(header[0x0A]);
+	imageSize = *(int*)&(header[0x22]);
+	width     = *(int*)&(header[0x12]);
+	height    = *(int*)&(header[0x16]);
+	//Some BMP files are misformatted, guess missing information
+	if (imageSize==0) imageSize=width*height*3;
+	if (dataPos==0) dataPos=54;
+	data = (unsigned char *)malloc(imageSize+1);
+	//Read the actual data from the file into the buffer
+	retval = fread(data,1,imageSize,file);
+	fclose(file);
+	//In glTexImage2D, the GL_RGB indicates that we are talking
+	//about a 3-component color, and GL_BGR says how exactly
+	//it is represented in RAM. As a matter of fact, BMP does
+	//not store Red->Green->Blue but Blue->Green->Red, so we
+	//have to tell it to OpenGL.
+	#define GL_BGR 0x80E0
+	//Create one OpenGL texture
+	GLuint textureID;
+	glGenTextures(1, &textureID);
+	glBindTexture(GL_TEXTURE_2D, textureID);
+	glTexImage2D(GL_TEXTURE_2D, 0,GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, data);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	free(data);
+	return textureID;
+}
+
+/*
+path_vert and path_horiz traverse the grid from a starting position, recursively
+searching for a path which hits the desired edge of the board. Grid.check is
+used to keep track of which cells have been checked in the current path
+traversal, to prevent backtracking to previous cells. Grid.mark is used to
+indicate which cells are part of the current path, so we can find the winning
+path if true is returned. True is only returned when a square is reached on the
+end row or column, and is propagated back up the levels of recursion to the
+original caller.
+*/
+bool path_vert (Grid &cell, Grid** grid, int size)
+{
+	cell.mark = true;
+	if (cell.row == size - 1)
+		return true;
+
+	int row_min = cell.row - 1;
+	if (row_min < 0)
+		row_min = 0;
+
+	int row_max = cell.row + 1;
+	if (row_max >= size)
+		row_max = size - 1;
+
+	int col_min = cell.col - 1;
+	if (col_min < 0)
+		col_min = 0;
+
+	int col_max = cell.col + 1;
+	if (col_max >= size)
+		col_max = size - 1;
+
+	for (int row = row_max; row >= row_min; row--) {
+		for (int col = col_min; col <= col_max; col++) {
+			if (grid[row][col].contents == 'V' && grid[row][col].check == false) {
+
+				grid[row][col].check = true;
+				bool good = path_vert (grid[row][col], grid, size);
+
+				if (!good)
+					grid[row][col].mark = false;
+
+				if (grid[row][col].mark == true)
+					return good;
+			}
+		}
+	}
+	return false;
+}
+
+bool path_horiz (Grid &cell, Grid** grid, int size)
+{
+	cell.mark = true;
+	if (cell.col == size - 1)
+		return true;
+
+	int row_min = cell.row - 1;
+	if (row_min < 0)
+		row_min = 0;
+
+	int row_max = cell.row + 1;
+	if (row_max >= size)
+		row_max = size - 1;
+
+	int col_min = cell.col - 1;
+	if (col_min < 0)
+		col_min = 0;
+
+	int col_max = cell.col + 1;
+	if (col_max >= size)
+		col_max = size - 1;
+
+	for (int row = row_min; row <= row_max; row++) {
+		for (int col = col_max; col >= col_min; col--) {
+			if (grid[row][col].contents == 'H' && grid[row][col].check == false) {
+
+				grid[row][col].check = true;
+				bool good = path_horiz (grid[row][col], grid, size);
+
+				if (!good)
+					grid[row][col].mark = false;
+
+				if (grid[row][col].mark == true)
+						return good;
+			}
+		}
+	}
+	return false;
 }
