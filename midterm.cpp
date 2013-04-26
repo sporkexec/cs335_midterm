@@ -55,10 +55,13 @@ Grid **grid;
 int grid_dim=8;
 int board_dim;
 int qsize;
+char winner = '\0';
 //
 GLuint Htexture;
 GLuint Vtexture;
+GLuint Wintexture;
 GLuint loadBMP(const char *imagepath);
+void process_turn(Grid &cell, char value, int grid_dim);
 
 
 int main(void)
@@ -145,8 +148,9 @@ void init_opengl(void)
 	glEnable(GL_TEXTURE_2D);
 	Htexture = loadBMP("H.bmp");
 	Vtexture = loadBMP("V.bmp");
+	Wintexture = loadBMP("win.bmp");
 	glBindTexture(GL_TEXTURE_2D, 0);
-	printf("tex: %i %i\n",Htexture,Vtexture);
+	printf("tex: %i %i %i\n",Htexture,Vtexture,Wintexture);
 }
 
 void init(void)
@@ -210,7 +214,7 @@ void GLFWCALL mouse_click(int button, int action)
 {
 	int x,y;
 	if (action == GLFW_PRESS) {
-		int i,j,k=0;
+		int i,j=0;
 		//center of a grid
 		int cent[2];
 		glfwGetMousePos(&x, &y);
@@ -223,13 +227,13 @@ void GLFWCALL mouse_click(int button, int action)
 					x <= cent[0]+qsize &&
 					y >= cent[1]-qsize &&
 					y <= cent[1]+qsize) {
-					if (button == GLFW_MOUSE_BUTTON_LEFT)  grid[i][j].contents='V';
-					if (button == GLFW_MOUSE_BUTTON_RIGHT) grid[i][j].contents='H';
-					k=1;
-					break;
+					if (button == GLFW_MOUSE_BUTTON_LEFT)
+						process_turn(grid[i][j], 'V', grid_dim);
+					if (button == GLFW_MOUSE_BUTTON_RIGHT)
+						process_turn(grid[i][j], 'H', grid_dim);
+					return;
 				}
 			}
-			if (k) break;
 		}
 	}
 }
@@ -338,8 +342,9 @@ void render(void)
 				glColor3f(1.0f, 1.0f, 0.0f);
 			}
 			glBindTexture(GL_TEXTURE_2D, 0);
-			if (grid[i][j].contents=='V') glBindTexture(GL_TEXTURE_2D, Vtexture);
-			if (grid[i][j].contents=='H') glBindTexture(GL_TEXTURE_2D, Htexture);
+			if (grid[i][j].mark)               glBindTexture(GL_TEXTURE_2D, Wintexture);
+			else if (grid[i][j].contents=='V') glBindTexture(GL_TEXTURE_2D, Vtexture);
+			else if (grid[i][j].contents=='H') glBindTexture(GL_TEXTURE_2D, Htexture);
 			glBegin(GL_QUADS);
 				glTexCoord2f(0.0f, 0.0f); glVertex2i(cent[0]-qsize,cent[1]-qsize);
 				glTexCoord2f(0.0f, 1.0f); glVertex2i(cent[0]-qsize,cent[1]+qsize);
@@ -500,3 +505,38 @@ bool path_horiz (Grid &cell, Grid** grid, int size)
 	}
 	return false;
 }
+
+// Given a particular cell and an H/V value, process a player's choice.
+void process_turn(Grid &cell, char value, int grid_dim) {
+	int i, j;
+	if(cell.contents) // Prevent overwriting a cell.
+		return;
+	cell.contents = value;
+
+	for(i=0; i < grid_dim; i++) {
+		for(j=0; j < grid_dim; j++) {
+			grid[i][j].mark = false;
+			grid[i][j].check = false;
+		}
+	}
+
+	if(value == 'H') {
+		for(i=0; i < grid_dim; i++) {
+			if(grid[i][0].contents == 'H' && path_horiz(grid[i][0], grid, grid_dim)) {
+				winner = 'H';
+				printf("Winner: H\n");
+				return;
+			}
+		}
+	}
+	if(value == 'V') {
+		for(i=0; i < grid_dim; i++) {
+			if(grid[0][i].contents == 'V' && path_vert(grid[0][i], grid, grid_dim)) {
+				winner = 'V';
+				printf("Winner: V\n");
+				return;
+			}
+		}
+	}
+}
+
