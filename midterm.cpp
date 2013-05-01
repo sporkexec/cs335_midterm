@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <GL/glfw.h>
+#include <unistd.h>
 //macros
 #define rnd() (double)rand()/(double)RAND_MAX
 //prototypes
@@ -52,7 +53,7 @@ typedef struct t_grid {
 	int col;
 } Grid;
 Grid **grid;
-int grid_dim=8;
+int grid_dim;
 int board_dim;
 int qsize;
 char winner = '\0';
@@ -64,16 +65,34 @@ GLuint loadBMP(const char *imagepath);
 void process_turn(Grid &cell, char value, int grid_dim);
 
 
-int main(void)
+int main(int argc, char *argv[])
 {
+    if (argc != 2)
+    {
+	grid_dim = 8;
+    }
+    if (argc == 2)
+    {
+    	grid_dim = atoi(argv[1]);
+    }
+
+
 	if (init_glfw()) {
 		exit(EXIT_FAILURE);
 	}
 	init_opengl();
 	init();
 	srand((unsigned int)time(NULL));
+Restart:
 	init_grid();
 	while(1) {
+		if (winner !='\0'){
+		    render();
+		    glfwSwapBuffers();
+		    winner ='\0';
+		    sleep(3);
+		    goto Restart;
+		}
 		check_mouse();
 		render();
 		glfwSwapBuffers();
